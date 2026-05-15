@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Love Layer</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Noto+Serif+JP:wght@200;300;400&display=swap" rel="stylesheet">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1a0a10">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<script>
+// ★ プロキシWorkerのURL
+const PROXY_URL = 'https://fate-layer-proxy.toshihide3.workers.dev';
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js');
+    });
+  }
+</script>
+<style>
+  :root {
+    --void: #110508; --deep: #1a0a10; --ink: #220d15;
+    --rose: #c94c7a; --rose-dim: #7a2a48; --rose-bright: #f080a8;
+    --gold: #c9a84c; --gold-dim: #7a6230;
+    --lavender: #a070c0; --mist: #2a1020;
+    --text: #e8d0d8; --text-dim: #7a6068;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--void); color: var(--text);
+    font-family: 'Noto Serif JP', serif; font-weight: 200;
+    min-height: 100vh; overflow-x: hidden; cursor: crosshair;
+  }
+
+  #skyCanvas {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    width: 100%; height: 100%;
+  }
+
+  .lang-bar {
+    position: fixed; top: 0; right: 0; left: 0; z-index: 100;
+    display: flex; justify-content: center; align-items: center;
+    padding: 8px 16px; gap: 2px; flex-wrap: nowrap; overflow-x: auto;
+    background: linear-gradient(to bottom, rgba(17,5,8,0.95) 0%, transparent 100%);
+    scrollbar-width: none;
+  }
+  .lang-bar::-webkit-scrollbar { display: none; }
+  .lang-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 10px 12px; background: transparent;
+    border: 1px solid transparent; border-radius: 2px;
+    color: var(--text-dim); font-family: inherit; font-size: 0.68rem;
+    letter-spacing: 0.04em; cursor: pointer; transition: all 0.25s; white-space: nowrap;
+    -webkit-tap-highlight-color: rgba(201,76,122,0.2);
+    touch-action: manipulation; min-height: 44px;
+  }
+  .lang-btn:hover { color: var(--text); border-color: rgba(201,76,122,0.2); }
+  .lang-btn.active { color: var(--rose); border-color: rgba(201,76,122,0.35); background: rgba(201,76,122,0.06); }
+
+  .wrap { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; padding: 0 24px; }
+
+  header { text-align: center; padding: 100px 0 50px; }
+  .heart-sigil { width: 80px; height: 80px; margin: 0 auto 28px; position: relative; }
+  .heart-sigil svg { width: 100%; height: 100%; animation: pulse-heart 3s ease-in-out infinite; }
+  .heart-sigil::after {
+    content: ''; position: absolute; inset: -12px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(201,76,122,0.2) 0%, transparent 70%);
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+  @keyframes pulse-heart {
+    0%,100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+  }
+  @keyframes pulse-glow { 0%,100%{opacity:0.4;transform:scale(1)} 50%{opacity:1;transform:scale(1.15)} }
+
+  h1 {
+    font-family: 'Cormorant Garamond', serif; font-weight: 300;
+    font-size: clamp(2rem, 5vw, 3rem); letter-spacing: 0.25em;
+    color: var(--rose-bright); margin-bottom: 8px;
+    text-shadow: 0 0 40px rgba(201,76,122,0.4);
+  }
+  .subtitle {
+    font-size: 0.72rem; letter-spacing: 0.35em; color: var(--text-dim);
+    text-transform: uppercase; margin-bottom: 40px;
+  }
+
+  .oracle-form {
+    position: relative; border: 1px solid rgba(201,76,122,0.15);
+    padding: 40px 32px; margin-bottom: 60px; background: rgba(34,13,21,0.6);
+    backdrop-filter: blur(10px);
+  }
+  .corner {
+    position: absolute; width: 16px; height: 16px;
+    border-color: var(--rose-dim); border-style: solid;
+  }
+  .corner.tl { top: -1px; left: -1px; border-width: 1px 0 0 1px; }
+  .corner.tr { top: -1px; right: -1px; border-width: 1px 1px 0 0; }
+  .corner.bl { bottom: -1px; left: -1px; border-width: 0 0 1px 1px; }
+  .corner.br { bottom: -1px; right: -1px; border-width: 0 1px 1px 0; }
+
+  .persons-wrap {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;
+  }
+  @media (max-width: 560px) { .persons-wrap { grid-template-columns: 1fr; } }
+
+  .person-card {
+    border: 1px solid rgba(201,76,122,0.12); padding: 20px 16px;
+    background: rgba(201,76,122,0.03);
+  }
+  .person-label {
+    font-size: 0.68rem; letter-spacing: 0.2em; color: var(--rose-dim);
+    margin-bottom: 14px; text-align: center; text-transform: uppercase;
+  }
+
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block; font-size: 0.65rem; letter-spacing: 0.15em;
+    color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase;
+  }
+  .field input, .field select, .field textarea {
+    width: 100%; background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(201,76,122,0.15); border-radius: 1px;
+    color: var(--text); padding: 10px 14px; outline: none;
+    font-family: inherit; font-size: 0.82rem; transition: border-color .3s;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    border-color: rgba(201,76,122,0.4);
+  }
+  .field select option { background: #220d15; }
+
+  .apikey-wrap { margin-bottom: 24px; }
+
+  .invoke-btn {
+    width: 100%; padding: 16px; background: transparent;
+    border: 1px solid rgba(201,76,122,0.4); color: var(--rose-bright);
+    font-family: inherit; font-size: 0.8rem; letter-spacing: 0.25em;
+    cursor: pointer; transition: all .4s; text-transform: uppercase;
+    touch-action: manipulation;
+  }
+  .invoke-btn:hover {
+    background: rgba(201,76,122,0.08);
+    border-color: rgba(201,76,122,0.7);
+    box-shadow: 0 0 30px rgba(201,76,122,0.15);
+  }
+
+  .error-msg {
+    display: none; margin-top: 16px; padding: 12px 16px;
+    border: 1px solid rgba(201,76,122,0.3); color: #e08090;
+    font-size: 0.75rem; letter-spacing: 0.05em; line-height: 1.8;
+  }
+  .error-msg.show { display: block; }
+
+  .loading-veil { display:none; text-align:center; padding:60px 0; }
+  .loading-veil.show { display:block; }
+  .orb {
+    width: 60px; height: 60px; margin: 0 auto 24px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgba(201,76,122,0.8), rgba(120,32,96,0.4));
+    box-shadow: 0 0 40px rgba(201,76,122,0.3);
+    animation: orb-spin 2s ease-in-out infinite;
+  }
+  @keyframes orb-spin {
+    0%,100%{transform:scale(1);box-shadow:0 0 40px rgba(201,76,122,0.3)}
+    50%{transform:scale(1.2);box-shadow:0 0 60px rgba(201,76,122,0.5),0 0 100px rgba(120,32,96,0.3)}
+  }
+  .loading-text {
+    font-size: 0.7rem; letter-spacing: 0.4em; color: var(--text-dim);
+    text-transform: uppercase; animation: fade-text 1.5s ease-in-out infinite;
+  }
+  @keyframes fade-text { 0%,100%{opacity:0.3} 50%{opacity:1} }
+
+  .result-scroll {
+    display: none; margin-bottom: 60px;
+    border: 1px solid rgba(201,76,122,0.2); padding: 40px 32px;
+    background: rgba(34,13,21,0.7); backdrop-filter: blur(10px);
+    animation: fadeIn 0.8s ease;
+  }
+  .result-scroll.show { display: block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+  .result-header { text-align: center; margin-bottom: 32px; }
+  .compatibility-score {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(3rem, 10vw, 5rem); color: var(--rose-bright);
+    text-shadow: 0 0 40px rgba(201,76,122,0.5); line-height: 1;
+    margin-bottom: 8px;
+  }
+  .score-label {
+    font-size: 0.65rem; letter-spacing: 0.3em; color: var(--text-dim);
+    text-transform: uppercase; margin-bottom: 16px;
+  }
+  .result-names {
+    font-size: 1.1rem; letter-spacing: 0.15em; color: var(--text);
+    margin-bottom: 8px;
+  }
+  .result-meta {
+    font-size: 0.65rem; letter-spacing: 0.12em; color: var(--text-dim);
+    line-height: 2;
+  }
+  .divider {
+    text-align: center; margin: 28px 0;
+    font-size: 0.7rem; letter-spacing: 0.3em; color: var(--rose-dim);
+  }
+  .fortune-text {
+    font-size: 0.88rem; line-height: 2.2; letter-spacing: 0.06em;
+    color: var(--text); white-space: pre-wrap;
+  }
+  .reset-btn {
+    display: block; margin: 32px auto 0; padding: 12px 40px;
+    background: transparent; border: 1px solid rgba(201,76,122,0.25);
+    color: var(--text-dim); font-family: inherit; font-size: 0.72rem;
+    letter-spacing: 0.2em; cursor: pointer; transition: all .3s;
+    touch-action: manipulation;
+  }
+  .reset-btn:hover { border-color: rgba(201,76,122,0.5); color: var(--text); }
+
+  footer {
+    text-align: center; padding: 40px 0 60px;
+    font-size: 0.6rem; letter-spacing: 0.2em; color: var(--text-dim);
+  }
+</style>
+</head>
+<body>
+<canvas id="skyCanvas"></canvas>
+
+<div class="lang-bar">
+  <button class="lang-btn active" onclick="setLang('ja')" data-lang="ja"><span>🇯🇵</span> 日本語</button>
+  <button class="lang-btn" onclick="setLang('en')" data-lang="en"><span>🇺🇸</span> English</button>
+  <button class="lang-btn" onclick="setLang('zh')" data-lang="zh"><span>🇨🇳</span> 中文</button>
+  <button class="lang-btn" onclick="setLang('ko')" data-lang="ko"><span>🇰🇷</span> 한국어</button>
+  <button class="lang-btn" onclick="setLang('fr')" data-lang="fr"><span>🇫🇷</span> Français</button>
+</div>
+
+<div class="wrap">
+  <header>
+    <div class="heart-sigil">
+      <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="40" cy="40" r="38" stroke="#c94c7a" stroke-width="0.5" opacity="0.6"/>
+        <circle cx="40" cy="40" r="28" stroke="#c94c7a" stroke-width="0.3" opacity="0.4"/>
+        <path d="M40 58 C40 58 18 44 18 30 C18 22 24 16 32 18 C36 19 40 24 40 24 C40 24 44 19 48 18 C56 16 62 22 62 30 C62 44 40 58 40 58Z" fill="none" stroke="#c94c7a" stroke-width="0.8" opacity="0.8"/>
+        <circle cx="40" cy="40" r="5" fill="rgba(201,76,122,0.3)" stroke="#c94c7a" stroke-width="0.5"/>
+        <line x1="40" y1="2" x2="40" y2="12" stroke="#c94c7a" stroke-width="0.5" opacity="0.5"/>
+        <line x1="40" y1="68" x2="40" y2="78" stroke="#c94c7a" stroke-width="0.5" opacity="0.5"/>
+        <line x1="2" y1="40" x2="12" y2="40" stroke="#c94c7a" stroke-width="0.5" opacity="0.5"/>
+        <line x1="68" y1="40" x2="78" y2="40" stroke="#c94c7a" stroke-width="0.5" opacity="0.5"/>
+      </svg>
+    </div>
+    <h1 id="appTitle">Love Layer</h1>
+    <p class="subtitle" id="appSubtitle">星と縁の相性占術</p>
+  </header>
+
+  <div class="oracle-form" id="formSection">
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
+
+    <!-- 質問欄 -->
+    <div class="field" style="margin-bottom:24px">
+      <label id="lQuestion">今の悩み・聞きたいこと（任意）</label>
+      <textarea id="question" rows="3" style="resize:vertical"></textarea>
+    </div>
+
+    <button class="invoke-btn" id="invokeBtn"></button>
+    <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <div class="loading-veil" id="loadingVeil">
+    <div class="orb"></div>
+    <p class="loading-text" id="loadingText"></p>
+  </div>
+
+  <div class="result-scroll" id="resultScroll">
+    <div class="result-header">
+      <div class="compatibility-score" id="compatScore">--</div>
+      <p class="score-label" id="scoreLabel">相性スコア</p>
+      <div class="result-names" id="resultNames"></div>
+      <div class="result-meta" id="resultMeta"></div>
+    </div>
+    <div class="divider"><span>♥</span></div>
+    <div class="fortune-text" id="fortuneText"></div>
+    <button class="reset-btn" id="resetBtn" onclick="resetForm()"></button>
+  </div>
+
+  <footer><p id="footerText"></p></footer>
+</div>
+
+<script>
+// ★ プロキシWorkerのURL
+// ══════════════════════════════════════════
+// i18n
+// ══════════════════════════════════════════
+const I18N = {
+  ja: {
+    lang:'ja', appTitle:'Love Layer', appSubtitle:'星と縁の相性占術',
+    lApiKey:'⚡ Groq APIキー',
+    lPersonA:'✦ あなた', lPersonB:'♥ 相手',
+    lLastNameA:'姓', lFirstNameA:'名', lBirthA:'生年月日', lGenderA:'性別',
+    lLastNameB:'姓', lFirstNameB:'名', lBirthB:'生年月日', lGenderB:'性別',
+    lQuestion:'今の悩み・聞きたいこと（任意）',
+    gOpt0:'選択してください', gOpt1:'女性', gOpt2:'男性', gOpt3:'その他',
+    invokeBtn:'縁を読み解く',
+    loadingText:'星の縁を読み解いています…',
+    scoreLabel:'相性スコア',
+    resetBtn:'もう一度占う',
+    footerText:'Love Layer — 星と縁の相性占術',
+    toggleShow:'表示', toggleHide:'隠す',
+    errApiKey:'Groq APIキーを入力してください',
+    errName:'お名前を入力してください',
+    errBirth:'生年月日を入力してください',
+    errAPI:'APIエラーが発生しました',
+    apikeyNote:'Groq Console（console.groq.com）に無料登録してAPIキーを取得。完全無料。クレジットカード不要。',
+    honorific:'様',
+    system:`あなたは東洋・西洋の占術に精通した相性占い師です。
+2人の生年月日・姓名・九星気学・数秘術・星座をもとに、詳細で具体的な相性鑑定を日本語で行ってください。
+必ず以下の形式で回答してください：
+1行目：「相性スコア: XX点」（0〜100の整数）
+2行目以降：詳細な鑑定文（500〜800文字）
+鑑定文には以下を含めてください：
+- 2人の相性の総評
+- 恋愛・結婚運
+- 仕事・友情での相性
+- 注意すべき点とアドバイス`,
+    buildUser: (a, b, q) => `【あなた】
+名前：${a.name}
+生年月日：${a.bd}（${a.zodiac}・${a.kyusei}・数秘${a.lp}）
+${a.seimei ? `姓名判断：天格${a.seimei.tenkaku}画・地格${a.seimei.chikaku}画・人格${a.seimei.jinkaku}画・総格${a.seimei.sokaku}画` : ''}
+性別：${a.gender}
+
+【相手】
+名前：${b.name}
+生年月日：${b.bd}（${b.zodiac}・${b.kyusei}・数秘${b.lp}）
+${b.seimei ? `姓名判断：天格${b.seimei.tenkaku}画・地格${b.seimei.chikaku}画・人格${b.seimei.jinkaku}画・総格${b.seimei.sokaku}画` : ''}
+性別：${b.gender}
+
+今日：${a.today}
+${q ? `相談内容：${q}` : ''}`
+  },
+  en: {
+    lang:'en', appTitle:'Love Layer', appSubtitle:'Celestial Compatibility Oracle',
+    lApiKey:'⚡ Groq API Key',
+    lPersonA:'✦ You', lPersonB:'♥ Partner',
+    lLastNameA:'Last Name', lFirstNameA:'First Name', lBirthA:'Date of Birth', lGenderA:'Gender',
+    lLastNameB:'Last Name', lFirstNameB:'First Name', lBirthB:'Date of Birth', lGenderB:'Gender',
+    lQuestion:'Your question (optional)',
+    gOpt0:'Select', gOpt1:'Female', gOpt2:'Male', gOpt3:'Other',
+    invokeBtn:'Reveal Compatibility',
+    loadingText:'Reading the celestial bonds…',
+    scoreLabel:'Compatibility Score',
+    resetBtn:'Read Again',
+    footerText:'Love Layer — Celestial Compatibility Oracle',
+    toggleShow:'Show', toggleHide:'Hide',
+    errApiKey:'Please enter your Groq API key',
+    errName:'Please enter names',
+    errBirth:'Please enter date of birth',
+    errAPI:'API error occurred',
+    apikeyNote:'Get a free key at Groq Console (console.groq.com). Completely free. No credit card required.',
+    honorific:'',
+    system:`You are an expert compatibility oracle versed in Eastern and Western astrology.
+Based on the two people's birth dates, names, Nine Star Ki, numerology, and zodiac signs, provide a detailed compatibility reading in English.
+Format your response as:
+Line 1: "Compatibility Score: XX" (integer 0-100)
+Line 2+: Detailed reading (500-800 characters) including:
+- Overall compatibility
+- Romantic and marriage potential
+- Friendship and work compatibility
+- Key advice and cautions`,
+    buildUser: (a, b, q) => `[Person A]
+Name: ${a.name}
+Birth: ${a.bd} (${a.zodiac}, ${a.kyusei}, Life Path ${a.lp})
+Gender: ${a.gender}
+
+[Person B]
+Name: ${b.name}
+Birth: ${b.bd} (${b.zodiac}, ${b.kyusei}, Life Path ${b.lp})
+Gender: ${b.gender}
+
+Today: ${a.today}
+${q ? `Question: ${q}` : ''}`
+  },
+  zh: {
+    lang:'zh', appTitle:'Love Layer', appSubtitle:'星缘配对占卜',
+    lApiKey:'⚡ Groq API 密钥',
+    lPersonA:'✦ 你', lPersonB:'♥ 对方',
+    lLastNameA:'姓', lFirstNameA:'名', lBirthA:'出生日期', lGenderA:'性别',
+    lLastNameB:'姓', lFirstNameB:'名', lBirthB:'出生日期', lGenderB:'性别',
+    lQuestion:'烦恼或问题（可选）',
+    gOpt0:'请选择', gOpt1:'女', gOpt2:'男', gOpt3:'其他',
+    invokeBtn:'解读缘分',
+    loadingText:'正在解读星缘…',
+    scoreLabel:'相性分数',
+    resetBtn:'再次占卜',
+    footerText:'Love Layer — 星缘配对占卜',
+    toggleShow:'显示', toggleHide:'隐藏',
+    errApiKey:'请输入 Groq API 密钥',
+    errName:'请输入姓名',
+    errBirth:'请输入出生日期',
+    errAPI:'API 错误',
+    apikeyNote:'在 Groq Console（console.groq.com）免费注册。完全免费，无需信用卡。',
+    honorific:'',
+    system:`你是精通东西方占星术的配对占卜师。根据两人的生日、姓名、九星气学、数秘术和星座，用中文进行详细的配对鉴定。
+格式要求：
+第1行："相性分数: XX分"（0-100整数）
+第2行起：详细鉴定文（500-800字），包括总体相性、恋爱婚姻运、工作友情相性、建议。`,
+    buildUser: (a, b, q) => `【你】姓名：${a.name}，生日：${a.bd}（${a.zodiac}·数秘${a.lp}）\n【对方】姓名：${b.name}，生日：${b.bd}（${b.zodiac}·数秘${b.lp}）\n今天：${a.today}${q?'\n问题：'+q:''}`
+  },
+  ko: {
+    lang:'ko', appTitle:'Love Layer', appSubtitle:'별과 인연의 궁합 점술',
+    lApiKey:'⚡ Groq API 키',
+    lPersonA:'✦ 나', lPersonB:'♥ 상대방',
+    lLastNameA:'성', lFirstNameA:'이름', lBirthA:'생년월일', lGenderA:'성별',
+    lLastNameB:'성', lFirstNameB:'이름', lBirthB:'생년월일', lGenderB:'성별',
+    lQuestion:'고민이나 질문（선택）',
+    gOpt0:'선택하세요', gOpt1:'여성', gOpt2:'남성', gOpt3:'기타',
+    invokeBtn:'인연을 읽다',
+    loadingText:'별의 인연을 읽고 있습니다…',
+    scoreLabel:'궁합 점수',
+    resetBtn:'다시 점치기',
+    footerText:'Love Layer — 별과 인연의 궁합 점술',
+    toggleShow:'표시', toggleHide:'숨기기',
+    errApiKey:'Groq API 키를 입력해 주세요',
+    errName:'이름을 입력해 주세요',
+    errBirth:'생년월일을 입력해 주세요',
+    errAPI:'API 오류가 발생했습니다',
+    apikeyNote:'Groq Console(console.groq.com)에서 무료 가입. 완전 무료, 신용카드 불필요.',
+    honorific:'님',
+    system:`당신은 동서양 점성술에 정통한 궁합 점술사입니다. 두 사람의 생년월일, 성명, 구성기학, 수비술, 별자리를 바탕으로 한국어로 상세한 궁합 감정을 해주세요.
+형식：1행："궁합 점수: XX점"（0-100 정수）, 2행 이후：상세 감정문（500-800자）`,
+    buildUser: (a, b, q) => `【나】이름：${a.name}，생일：${a.bd}（${a.zodiac}·수비${a.lp}）\n【상대방】이름：${b.name}，생일：${b.bd}（${b.zodiac}·수비${b.lp}）\n오늘：${a.today}${q?'\n질문：'+q:''}`
+  },
+  fr: {
+    lang:'fr', appTitle:'Love Layer', appSubtitle:'Oracle de Compatibilité Céleste',
+    lApiKey:'⚡ Clé API Groq',
+    lPersonA:'✦ Vous', lPersonB:'♥ Partenaire',
+    lLastNameA:'Nom', lFirstNameA:'Prénom', lBirthA:'Date de naissance', lGenderA:'Genre',
+    lLastNameB:'Nom', lFirstNameB:'Prénom', lBirthB:'Date de naissance', lGenderB:'Genre',
+    lQuestion:'Votre question (optionnel)',
+    gOpt0:'Sélectionner', gOpt1:'Femme', gOpt2:'Homme', gOpt3:'Autre',
+    invokeBtn:'Révéler la Compatibilité',
+    loadingText:'Lecture des liens célestes…',
+    scoreLabel:'Score de Compatibilité',
+    resetBtn:'Lire à nouveau',
+    footerText:'Love Layer — Oracle de Compatibilité Céleste',
+    toggleShow:'Afficher', toggleHide:'Masquer',
+    errApiKey:'Veuillez entrer votre clé API Groq',
+    errName:'Veuillez entrer les noms',
+    errBirth:'Veuillez entrer la date de naissance',
+    errAPI:"Erreur API",
+    apikeyNote:'Inscrivez-vous gratuitement sur Groq Console (console.groq.com). Entièrement gratuit, sans carte bancaire.',
+    honorific:'',
+    system:`Vous êtes un oracle de compatibilité expert en astrologie orientale et occidentale.
+Basé sur les dates de naissance, prénoms, numérologie et signes zodiacaux, fournissez une lecture détaillée en français.
+Format：Ligne 1："Score de Compatibilité: XX"（0-100）, Ligne 2+：Lecture détaillée（500-800 caractères）`,
+    buildUser: (a, b, q) => `[Vous] ${a.name}, né(e) ${a.bd} (${a.zodiac}, chemin de vie ${a.lp})\n[Partenaire] ${b.name}, né(e) ${b.bd} (${b.zodiac}, chemin de vie ${b.lp})\nAujourd'hui: ${a.today}${q?'\nQuestion: '+q:''}`
+  }
+};
+
+let currentLang = 'ja';
+
+function setLang(lang) {
+  currentLang = lang;
+  const t = I18N[lang];
+  document.documentElement.lang = t.lang;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+  document.getElementById('appTitle').textContent = t.appTitle;
+  document.getElementById('appSubtitle').textContent = t.appSubtitle;
+  document.getElementById('lPersonA').textContent = t.lPersonA;
+  document.getElementById('lPersonB').textContent = t.lPersonB;
+  document.getElementById('lLastNameA').textContent = t.lLastNameA;
+  document.getElementById('lFirstNameA').textContent = t.lFirstNameA;
+  document.getElementById('lBirthA').textContent = t.lBirthA;
+  document.getElementById('lGenderA').textContent = t.lGenderA;
+  document.getElementById('lLastNameB').textContent = t.lLastNameB;
+  document.getElementById('lFirstNameB').textContent = t.lFirstNameB;
+  document.getElementById('lBirthB').textContent = t.lBirthB;
+  document.getElementById('lGenderB').textContent = t.lGenderB;
+  document.getElementById('lQuestion').textContent = t.lQuestion;
+  document.getElementById('invokeBtn').textContent = t.invokeBtn;
+  document.getElementById('loadingText').textContent = t.loadingText;
+  document.getElementById('scoreLabel').textContent = t.scoreLabel;
+  document.getElementById('resetBtn').textContent = t.resetBtn;
+  document.getElementById('footerText').textContent = t.footerText;
+  document.getElementById('toggleBtn').textContent = t.toggleShow;
+  ['A','B'].forEach(p => {
+    ['0','1','2','3'].forEach(i => {
+      const el = document.getElementById(`gOpt${p}${i}`);
+      if (el) el.textContent = t[`gOpt${i}`];
+    });
+  });
+  document.title = t.appTitle;
+}
+
+// ストレージ
+function storageSave(key, value) {
+  try { localStorage.setItem(key, value); } catch(e) {}
+  try {
+    const expires = new Date();
+    expires.setFullYear(expires.getFullYear() + 1);
+    document.cookie = encodeURIComponent(key) + '=' + encodeURIComponent(value) + '; expires=' + expires.toUTCString() + '; path=/; SameSite=Lax';
+  } catch(e) {}
+}
+function storageLoad(key) {
+  try { const v = localStorage.getItem(key); if (v !== null) return v; } catch(e) {}
+  try {
+    const name = encodeURIComponent(key) + '=';
+    for (let p of document.cookie.split(';')) {
+      p = p.trim();
+      if (p.startsWith(name)) return decodeURIComponent(p.substring(name.length));
+    }
+  } catch(e) {}
+  return null;
+}
+
+function saveData() {
+  const data = {
+    lastNameA: document.getElementById('lastNameA').value,
+    firstNameA: document.getElementById('firstNameA').value,
+    birthdateA: document.getElementById('birthdateA').value,
+    genderA: document.getElementById('genderA').value,
+    lastNameB: document.getElementById('lastNameB').value,
+    firstNameB: document.getElementById('firstNameB').value,
+    birthdateB: document.getElementById('birthdateB').value,
+    genderB: document.getElementById('genderB').value,
+    question: document.getElementById('question').value,
+    lang: currentLang
+  };
+  try { storageSave('lovelayer_data', JSON.stringify(data)); } catch(e) {}
+}
+
+function loadData() {
+  try {
+    const raw = storageLoad('lovelayer_data');
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    if (d.lastNameA) document.getElementById('lastNameA').value = d.lastNameA;
+    if (d.firstNameA) document.getElementById('firstNameA').value = d.firstNameA;
+    if (d.birthdateA) document.getElementById('birthdateA').value = d.birthdateA;
+    if (d.genderA) document.getElementById('genderA').value = d.genderA;
+    if (d.lastNameB) document.getElementById('lastNameB').value = d.lastNameB;
+    if (d.firstNameB) document.getElementById('firstNameB').value = d.firstNameB;
+    if (d.birthdateB) document.getElementById('birthdateB').value = d.birthdateB;
+    if (d.genderB) document.getElementById('genderB').value = d.genderB;
+    if (d.question) document.getElementById('question').value = d.question;
+    if (d.lang) setLang(d.lang);
+  } catch(e) {}
+}
+
+
+// 占術計算
+const ZODIAC = {
+  ja: ['山羊座','水瓶座','魚座','牡羊座','牡牛座','双子座','蟹座','獅子座','乙女座','天秤座','蠍座','射手座'],
+  en: ['Capricorn','Aquarius','Pisces','Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius'],
+  zh: ['摩羯座','水瓶座','双鱼座','白羊座','金牛座','双子座','巨蟹座','狮子座','处女座','天秤座','天蝎座','射手座'],
+  ko: ['염소자리','물병자리','물고기자리','양자리','황소자리','쌍둥이자리','게자리','사자자리','처녀자리','천칭자리','전갈자리','사수자리'],
+  fr: ['Capricorne','Verseau','Poissons','Bélier','Taureau','Gémeaux','Cancer','Lion','Vierge','Balance','Scorpion','Sagittaire'],
+};
+const CUTS = [[1,20],[2,19],[3,21],[4,20],[5,21],[6,22],[7,23],[8,23],[9,23],[10,24],[11,23],[12,22]];
+
+function getZodiac(dateStr) {
+  const d = new Date(dateStr);
+  const m = d.getMonth()+1, day = d.getDate();
+  const names = ZODIAC[currentLang] || ZODIAC.en;
+  for (let i=0;i<CUTS.length;i++) {
+    const [cm,cd] = CUTS[i];
+    if (m<cm||(m===cm&&day<cd)) return names[i];
+  }
+  return names[0];
+}
+
+function getLifeNum(dateStr) {
+  let s = dateStr.replace(/-/g,'').split('').map(Number).reduce((a,b)=>a+b,0);
+  while(s>9&&s!==11&&s!==22) s=String(s).split('').map(Number).reduce((a,b)=>a+b,0);
+  return s;
+}
+
+const KYUSEI_JA = ['五黄土星','四緑木星','三碧木星','二黒土星','一白水星','九紫火星','八白土星','七赤金星','六白金星'];
+function getKyusei(dateStr) {
+  const yr = new Date(dateStr).getFullYear();
+  return KYUSEI_JA[(9-((yr-1900)%9))%9];
+}
+
+// 姓名判断
+function getStrokeCount(char) {
+  const strokes = {
+    '一':1,'二':2,'三':3,'四':5,'五':4,'六':6,'七':7,'八':8,'九':9,'十':2,
+    '山':3,'川':3,'田':5,'木':4,'水':4,'火':4,'土':3,'金':8,'日':4,'月':4,
+    '花':7,'空':8,'海':9,'星':9,'光':6,'風':9,'雨':8,'雪':11,'愛':13,'夢':13,
+    '希':7,'望':11,'幸':8,'福':13,'美':9,'純':10,'心':4,'魂':14,
+    '太':4,'大':3,'小':3,'中':4,'上':3,'下':3,'正':5,'明':8,'信':9,'誠':13,
+    '健':11,'勇':9,'智':12,'仁':4,'義':13,'礼':5,'和':8,'平':5,'安':6,'清':11,
+    '春':9,'夏':10,'秋':9,'冬':5,'桜':10,'梅':10,'松':8,'竹':6,'菊':11,'蓮':13,
+    '龍':16,'鳳':14,'麗':19,'優':17,'雅':13,'凛':15,'彩':11,'碧':14,'瑠':14,'璃':15,
+    '翔':12,'颯':14,'蒼':13,'朔':10,'律':9,'奏':9,'澪':16,'紬':11,'詩':13,
+  };
+  return strokes[char] || 10;
+}
+
+function getSeimei(lastName, firstName) {
+  if (!lastName && !firstName) return null;
+  const lastStrokes = lastName.split('').reduce((s,c)=>s+getStrokeCount(c),0);
+  const firstStrokes = firstName.split('').reduce((s,c)=>s+getStrokeCount(c),0);
+  function getKikyo(n) {
+    const num = n%81||81;
+    const kichi=[1,3,5,6,7,8,11,13,15,16,17,18,21,23,24,25,29,31,32,33,35,37,38,39,41,45,47,48,52,57,58,61,63,65,67,68,81];
+    return kichi.includes(num)?'吉':'凶';
+  }
+  const tenkaku=lastStrokes, chikaku=firstStrokes;
+  const jinkaku=lastStrokes+firstStrokes;
+  const gaikaku=lastStrokes+firstStrokes+1;
+  const sokaku=lastStrokes+firstStrokes;
+  return { tenkaku, chikaku, jinkaku, gaikaku, sokaku,
+    tenkakuKikyo:getKikyo(tenkaku), chikakuKikyo:getKikyo(chikaku),
+    jinkakuKikyo:getKikyo(jinkaku), sokakuKikyo:getKikyo(sokaku) };
+}
+
+// メイン処理
+async function invokeCompatibility() {
+  try {
+  const t = I18N[currentLang];
+  const lastNameA = document.getElementById('lastNameA').value.trim();
+  const firstNameA = document.getElementById('firstNameA').value.trim();
+  const bdA = document.getElementById('birthdateA').value;
+  const genderA = document.getElementById('genderA').value;
+  const lastNameB = document.getElementById('lastNameB').value.trim();
+  const firstNameB = document.getElementById('firstNameB').value.trim();
+  const bdB = document.getElementById('birthdateB').value;
+  const genderB = document.getElementById('genderB').value;
+  const q = document.getElementById('question').value.trim();
+
+  document.getElementById('errorMsg').className = 'error-msg';
+
+  if (!lastNameA && !firstNameA) { showError(t.errName); return; }
+  if (!bdA) { showError(t.errBirth); return; }
+  if (!lastNameB && !firstNameB) { showError(t.errName); return; }
+  if (!bdB) { showError(t.errBirth); return; }
+
+  try { saveData(); } catch(e) {}
+
+  const today = new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
+
+  const pdataA = {
+    name: (lastNameA+' '+firstNameA).trim(),
+    bd: bdA, gender: genderA,
+    zodiac: getZodiac(bdA),
+    kyusei: getKyusei(bdA),
+    lp: getLifeNum(bdA),
+    seimei: getSeimei(lastNameA, firstNameA),
+    today
+  };
+  const pdataB = {
+    name: (lastNameB+' '+firstNameB).trim(),
+    bd: bdB, gender: genderB,
+    zodiac: getZodiac(bdB),
+    kyusei: getKyusei(bdB),
+    lp: getLifeNum(bdB),
+    seimei: getSeimei(lastNameB, firstNameB),
+    today
+  };
+
+  document.getElementById('formSection').style.display = 'none';
+  document.getElementById('loadingVeil').className = 'loading-veil show';
+  document.getElementById('resultScroll').className = 'result-scroll';
+
+  const prompt = t.system + '\n\n' + t.buildUser(pdataA, pdataB, q);
+
+  const GROQ_MODELS = ['llama-3.3-70b-versatile','llama3-70b-8192','gemma2-9b-it','llama3-8b-8192'];
+  let text = '';
+  let groqSucceeded = false;
+  let groqLastErr = '';
+
+  for (const model of GROQ_MODELS) {
+    try {
+      const res = await fetch(PROXY_URL, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({model, max_tokens:1200, temperature:0.85, messages:[{role:'user',content:prompt}]})
+      });
+      const data = await res.json();
+      if (res.ok && data.choices?.[0]?.message?.content) {
+        text = data.choices[0].message.content;
+        groqSucceeded = true;
+        break;
+      }
+      groqLastErr = `${model}: ${res.status} ${data?.error?.message||''}`;
+    } catch(e) {
+      groqLastErr = `${model}: ネットワークエラー`;
+    }
+  }
+
+  if (!groqSucceeded) throw new Error('GROQ_FAILED:' + groqLastErr);
+
+  // スコア抽出
+  const scoreMatch = text.match(/(\d{1,3})[点分]?/);
+  const score = scoreMatch ? Math.min(100, parseInt(scoreMatch[1])) : 75;
+  const bodyText = text.replace(/^.+\n/, '').trim();
+
+  document.getElementById('loadingVeil').className = 'loading-veil';
+  document.getElementById('compatScore').textContent = score + (currentLang==='ja'?'点':'');
+  document.getElementById('resultNames').textContent = pdataA.name + (currentLang==='ja'?' 様':'') + '  ♥  ' + pdataB.name + (currentLang==='ja'?' 様':'');
+  document.getElementById('resultMeta').textContent =
+    `${pdataA.zodiac} × ${pdataB.zodiac}\n数秘 ${pdataA.lp} × ${pdataB.lp}`;
+  document.getElementById('fortuneText').textContent = bodyText;
+  document.getElementById('resultScroll').className = 'result-scroll show';
+
+  } catch(err) {
+    document.getElementById('loadingVeil').className = 'loading-veil';
+    document.getElementById('formSection').style.display = 'block';
+    const msg = err.message || '';
+    if (msg.startsWith('GROQ_FAILED:')) {
+      showError('Groqエラー: ' + msg.slice(12));
+    } else {
+      showError(I18N[currentLang].errAPI + (msg ? '（'+msg.slice(0,60)+'）' : ''));
+    }
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg; el.className = 'error-msg show';
+}
+
+function resetForm() {
+  document.getElementById('resultScroll').className = 'result-scroll';
+  document.getElementById('formSection').style.display = 'block';
+  document.getElementById('errorMsg').className = 'error-msg';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ══════════════════════════════════════════
+// Night Sky Canvas（ピンク系）
+// ══════════════════════════════════════════
+(function() {
+  const canvas = document.getElementById('skyCanvas');
+  const ctx = canvas.getContext('2d');
+
+  function resize() { canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+  resize();
+  window.addEventListener('resize', ()=>{ resize(); initStars(); });
+
+  const STAR_COUNT = 280;
+  let stars = [];
+  function initStars() {
+    stars = [];
+    for (let i=0;i<STAR_COUNT;i++) {
+      const r = Math.random();
+      stars.push({
+        x: Math.random()*canvas.width,
+        y: Math.random()*canvas.height,
+        radius: r<0.6?Math.random()*0.8+0.2:r<0.9?Math.random()*1.2+0.8:Math.random()*1.8+1.2,
+        baseAlpha: Math.random()*0.5+0.3,
+        alpha: 0,
+        twinkleSpeed: Math.random()*0.02+0.005,
+        twinkleOffset: Math.random()*Math.PI*2,
+        color: r<0.15?'#f080a8':r<0.25?'#c0a0c8':'#ffffff',
+      });
+    }
+  }
+
+  function drawNebula() {
+    const blobs=[
+      {x:0.2,y:0.3,rx:0.3,ry:0.25,color:'rgba(120,20,60,0.15)'},
+      {x:0.8,y:0.6,rx:0.25,ry:0.3,color:'rgba(80,20,80,0.18)'},
+      {x:0.5,y:0.1,rx:0.2,ry:0.15,color:'rgba(180,40,100,0.08)'},
+    ];
+    blobs.forEach(b=>{
+      const grd=ctx.createRadialGradient(b.x*canvas.width,b.y*canvas.height,0,b.x*canvas.width,b.y*canvas.height,Math.max(b.rx*canvas.width,b.ry*canvas.height));
+      grd.addColorStop(0,b.color); grd.addColorStop(1,'transparent');
+      ctx.fillStyle=grd; ctx.beginPath();
+      ctx.ellipse(b.x*canvas.width,b.y*canvas.height,b.rx*canvas.width,b.ry*canvas.height,0,0,Math.PI*2);
+      ctx.fill();
+    });
+  }
+
+  const METEOR_MAX=5; let meteors=[];
+  function spawnMeteor() {
+    if(meteors.length>=METEOR_MAX) return;
+    const angle=(Math.random()*30+15)*Math.PI/180;
+    const speed=Math.random()*8+6;
+    const len=Math.random()*180+80;
+    const startX=Math.random()*canvas.width*1.2-canvas.width*0.1;
+    const startY=Math.random()*canvas.height*0.5;
+    const brightness=Math.random()*0.4+0.6;
+    const hue=Math.random()<0.4?`rgba(240,128,168,${brightness})`:`rgba(255,255,255,${brightness})`;
+    meteors.push({x:startX,y:startY,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,len,color:hue,alpha:0,phase:'fadein',life:0,maxLife:Math.random()*40+30,trail:[]});
+  }
+  function scheduleMeteor() { const delay=Math.random()*2500+800; setTimeout(()=>{spawnMeteor();scheduleMeteor();},delay); }
+  scheduleMeteor();
+  setTimeout(spawnMeteor,400); setTimeout(spawnMeteor,1200);
+
+  function updateMeteors() {
+    meteors=meteors.filter(m=>m.phase!=='dead');
+    meteors.forEach(m=>{
+      m.trail.push({x:m.x,y:m.y});
+      if(m.trail.length>22)m.trail.shift();
+      m.x+=m.vx;m.y+=m.vy;m.life++;
+      if(m.phase==='fadein'){m.alpha=Math.min(1,m.alpha+0.08);if(m.alpha>=1)m.phase='live';}
+      else if(m.phase==='live'){if(m.life>m.maxLife)m.phase='fadeout';}
+      else if(m.phase==='fadeout'){m.alpha=Math.max(0,m.alpha-0.06);if(m.alpha<=0)m.phase='dead';}
+      if(m.x>canvas.width+200||m.y>canvas.height+200)m.phase='dead';
+    });
+  }
+
+  function drawMeteors() {
+    meteors.forEach(m=>{
+      if(m.trail.length<2)return;
+      ctx.save();ctx.globalAlpha=m.alpha;
+      const headGrd=ctx.createRadialGradient(m.x,m.y,0,m.x,m.y,3.5);
+      headGrd.addColorStop(0,'rgba(255,255,255,0.9)');
+      headGrd.addColorStop(0.4,m.color.replace(/[\d.]+\)$/,'0.6)'));
+      headGrd.addColorStop(1,'transparent');
+      ctx.fillStyle=headGrd;ctx.beginPath();ctx.arc(m.x,m.y,3.5,0,Math.PI*2);ctx.fill();
+      for(let i=1;i<m.trail.length;i++){
+        const t=i/m.trail.length;
+        ctx.beginPath();ctx.moveTo(m.trail[i-1].x,m.trail[i-1].y);ctx.lineTo(m.trail[i].x,m.trail[i].y);
+        ctx.strokeStyle=m.color.replace(/[\d.]+\)$/,`${t*0.4})`);ctx.lineWidth=t*1.5;ctx.stroke();
+      }
+      ctx.restore();
+    });
+  }
+
+  let frame=0;
+  function draw() {
+    ctx.fillStyle='rgba(17,5,8,0.15)';ctx.fillRect(0,0,canvas.width,canvas.height);
+    if(frame===0){ctx.fillStyle='#110508';ctx.fillRect(0,0,canvas.width,canvas.height);drawNebula();}
+    stars.forEach(s=>{
+      s.alpha=s.baseAlpha*(0.5+0.5*Math.sin(frame*s.twinkleSpeed+s.twinkleOffset));
+      ctx.globalAlpha=s.alpha;ctx.fillStyle=s.color;
+      ctx.beginPath();ctx.arc(s.x,s.y,s.radius,0,Math.PI*2);ctx.fill();
+    });
+    ctx.globalAlpha=1;
+    updateMeteors();drawMeteors();
+    frame++;requestAnimationFrame(draw);
+  }
+  initStars();draw();
+})();
+
+// タッチイベント（言語ボタン）
+document.querySelectorAll('.lang-btn').forEach(btn => {
+  btn.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    setLang(this.dataset.lang);
+  }, {passive:false});
+});
+
+// invokeボタン
+document.addEventListener('DOMContentLoaded', function() {
+  const btn = document.getElementById('invokeBtn');
+  if (btn) btn.addEventListener('click', function(e) { e.preventDefault(); invokeCompatibility(); });
+});
+
+setLang('ja');
+loadData();
+</script>
+</body>
+</html>
