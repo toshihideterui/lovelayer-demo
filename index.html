@@ -9,8 +9,6 @@
 <meta name="theme-color" content="#1a0a10">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <script>
-// ★ プロキシWorkerのURL
-const PROXY_URL = 'https://fate-layer-proxy.toshihide3.workers.dev';
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js');
@@ -253,6 +251,43 @@ const PROXY_URL = 'https://fate-layer-proxy.toshihide3.workers.dev';
     <div class="corner tl"></div><div class="corner tr"></div>
     <div class="corner bl"></div><div class="corner br"></div>
 
+    <!-- API Key -->
+    <!-- 2人の情報 -->
+    <div class="persons-wrap">
+      <!-- 人物A -->
+      <div class="person-card">
+        <p class="person-label" id="lPersonA">✦ あなた</p>
+        <div class="field"><label id="lLastNameA">姓</label><input type="text" id="lastNameA"></div>
+        <div class="field"><label id="lFirstNameA">名</label><input type="text" id="firstNameA"></div>
+        <div class="field"><label id="lBirthA">生年月日</label><input type="date" id="birthdateA"></div>
+        <div class="field">
+          <label id="lGenderA">性別</label>
+          <select id="genderA">
+            <option value="" id="gOptA0"></option>
+            <option value="female" id="gOptA1"></option>
+            <option value="male" id="gOptA2"></option>
+            <option value="other" id="gOptA3"></option>
+          </select>
+        </div>
+      </div>
+      <!-- 人物B -->
+      <div class="person-card">
+        <p class="person-label" id="lPersonB">♥ 相手</p>
+        <div class="field"><label id="lLastNameB">姓</label><input type="text" id="lastNameB"></div>
+        <div class="field"><label id="lFirstNameB">名</label><input type="text" id="firstNameB"></div>
+        <div class="field"><label id="lBirthB">生年月日</label><input type="date" id="birthdateB"></div>
+        <div class="field">
+          <label id="lGenderB">性別</label>
+          <select id="genderB">
+            <option value="" id="gOptB0"></option>
+            <option value="female" id="gOptB1"></option>
+            <option value="male" id="gOptB2"></option>
+            <option value="other" id="gOptB3"></option>
+          </select>
+        </div>
+      </div>
+    </div>
+
     <!-- 質問欄 -->
     <div class="field" style="margin-bottom:24px">
       <label id="lQuestion">今の悩み・聞きたいこと（任意）</label>
@@ -285,6 +320,8 @@ const PROXY_URL = 'https://fate-layer-proxy.toshihide3.workers.dev';
 
 <script>
 // ★ プロキシWorkerのURL
+const PROXY_URL = 'https://fate-layer-proxy.toshihide3.workers.dev';
+
 // ══════════════════════════════════════════
 // i18n
 // ══════════════════════════════════════════
